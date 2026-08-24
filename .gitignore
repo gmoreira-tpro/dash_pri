@@ -1,4 +1,4 @@
-     node_modules/
-     api/local.settings.json
-     .vscode/
-     *.log
+node_modules/
+api/local.settings.json
+.vscode/
+*.log
