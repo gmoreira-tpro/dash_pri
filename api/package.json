@@ -1,0 +1,11 @@
+{
+  "name": "dash-pri-api",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@azure/data-tables": "^13.2.2"
+  }
+}

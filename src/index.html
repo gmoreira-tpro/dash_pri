@@ -1,0 +1,1302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hoffweb Priorities — TDP + MAS</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+  :root{
+    --ink:#0F2A38; --muted:#5B7182; --bg:#F5F7F8; --card:#FFFFFF;
+    --border:#DCE4E8; --teal:#004562; --teal-dark:#00293A; --cyan:#00BAE8;
+    --p1:#D13438; --p1-bg:#FDE7E9;
+    --p2:#CA5010; --p2-bg:#FDF0E3;
+    --p3:#986F0B; --p3-bg:#FFF8DC;
+    --none-bg:#F3F2F1;
+    --green:#1B8A5A; --green-bg:#E4F7EE;
+    --purple:#6941C6; --purple-bg:#F1EAFB;
+    font-family:"DM Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html, body{margin:0;background:var(--bg);color:var(--ink);max-width:100%;overflow-x:auto;}
+  header{
+    background:linear-gradient(135deg, var(--teal) 0%, var(--teal-dark) 100%);
+    color:#fff;padding:20px 28px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;
+  }
+  .htitle{font-size:17px;font-weight:600;}
+  .hsub{font-size:12px;color:rgba(255,255,255,.65);margin-top:2px;}
+  .live-badge{
+    display:flex;align-items:center;gap:6px;font-size:11px;background:rgba(255,255,255,.12);
+    border:1px solid rgba(255,255,255,.25);border-radius:20px;padding:5px 12px;color:#fff;white-space:nowrap;
+  }
+  .live-dot{width:6px;height:6px;border-radius:50%;background:#9CA8B0;}
+  .live-dot.ok{background:#3FE080;}
+  .live-dot.error{background:#F04438;}
+  .live-dot.loading{background:#F5C344;}
+
+  .project-switch{display:flex;gap:8px;padding:14px 16px 0;}
+  .project-btn{
+    border:1px solid var(--border);background:var(--card);color:var(--muted);font-weight:700;font-size:12.5px;
+    padding:8px 16px;border-radius:20px;cursor:pointer;
+  }
+  .project-btn.active{background:var(--teal);color:#fff;border-color:var(--teal);}
+
+  .toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:12px 16px 0;}
+  .tabs{display:flex;gap:8px;overflow-x:auto;}
+  .tab-btn{
+    border:none;background:transparent;padding:10px 18px;font-size:13px;font-weight:600;
+    color:var(--muted);cursor:pointer;border-radius:8px 8px 0 0;border-bottom:2px solid transparent;white-space:nowrap;
+  }
+  .tab-btn.active{color:var(--teal);border-bottom-color:var(--cyan);background:var(--card);}
+  .export-bar{display:flex;gap:10px;flex-wrap:wrap;}
+  .export-btn{
+    border:1px solid var(--border);background:var(--card);color:var(--teal);font-weight:600;
+    font-size:12.5px;padding:8px 14px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:6px;
+  }
+  .export-btn:hover{background:#F0F9FC;}
+
+  .search-wrap{
+    position:relative;display:flex;align-items:center;flex:1;min-width:180px;max-width:340px;
+  }
+  .search-icon{position:absolute;left:10px;font-size:12px;pointer-events:none;opacity:.6;}
+  .search-input{
+    width:100%;padding:8px 30px 8px 30px;border:1px solid var(--border);border-radius:8px;
+    font-size:12.5px;font-family:inherit;color:var(--ink);background:var(--card);
+  }
+  .search-input:focus{outline:none;border-color:var(--teal);}
+  .search-clear{
+    position:absolute;right:6px;border:none;background:none;color:var(--muted);cursor:pointer;
+    font-size:12px;padding:4px 6px;
+  }
+  .search-clear:hover{color:var(--ink);}
+
+  main{padding:0 16px 60px;max-width:100%;}
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:0 12px 12px 12px;padding:20px;max-width:100%;}
+  .status-group{margin-bottom:20px;}
+  .status-head{display:flex;align-items:center;gap:10px;margin-bottom:10px;cursor:pointer;user-select:none;}
+  .status-head h3{margin:0;font-size:14px;font-weight:600;}
+  .status-count{font-size:11px;background:var(--none-bg);color:var(--muted);border-radius:12px;padding:2px 10px;}
+  .collapse-chevron{
+    margin-left:auto;font-size:11px;color:var(--muted);background:var(--none-bg);border-radius:6px;
+    padding:3px 8px;transition:transform .15s ease;
+  }
+  .status-group.collapsed .collapse-chevron{transform:rotate(-90deg);}
+
+  .table-scroll{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:8px;}
+  .data-table{width:100%;min-width:1160px;border-collapse:collapse;font-size:12.5px;table-layout:fixed;}
+  .data-table th{
+    text-align:left;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.01em;padding:8px 8px;border-bottom:2px solid var(--border);white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;
+  }
+  .data-table td{
+    padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top;line-height:1.35;
+  }
+  .data-table tbody tr:hover{background:#FAFBFC;}
+  .col-type{width:78px;} .col-key{width:82px;} .col-summary{width:auto;min-width:220px;}
+  .col-reporter{width:150px;} .col-priority{width:74px;} .col-status{width:150px;}
+  .col-resolution{width:96px;} .col-created{width:96px;} .col-components{width:150px;}
+  .col-linked{width:120px;}
+  .col-fixversion{width:130px;}
+  .cell-key{font-weight:700;color:var(--teal);font-size:12px;}
+  .cell-muted{color:var(--muted);font-size:12px;}
+  .type-pill{
+    display:inline-block;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:5px;
+    background:#EAF1F5;color:var(--teal);
+  }
+  .status-pill{
+    display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:5px;white-space:nowrap;
+  }
+  .status-pill.st-green{background:var(--green-bg);color:var(--green);}
+  .status-pill.st-orange{background:var(--p2-bg);color:var(--p2);}
+  .status-pill.st-plain{background:var(--none-bg);color:var(--muted);}
+  .status-pill.st-purple{background:var(--purple-bg);color:var(--purple);}
+  .comp-chip{
+    display:inline-block;font-size:10px;background:var(--none-bg);color:var(--ink);border-radius:4px;
+    padding:1px 6px;margin:0 3px 3px 0;
+  }
+  .link-chip{background:#EAF1F5;color:var(--teal);font-weight:700;}
+  .fv-chip{background:var(--purple-bg);color:var(--purple);font-weight:700;}
+  .fv-chip-derived{display:inline-flex;align-items:center;gap:4px;}
+  .fv-via{font-weight:600;opacity:.75;font-size:9px;text-transform:none;}
+
+  .filter-wrap{position:relative;padding:0 0 14px;}
+  .filter-trigger{
+    display:flex;align-items:center;gap:10px;border:1px solid var(--border);background:var(--card);
+    padding:6px 12px 6px 6px;border-radius:20px;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--ink);
+  }
+  .filter-trigger:hover{background:#F0F9FC;}
+  .avatar-stack{display:flex;align-items:center;}
+  .avatar-stack .avatar-bubble{margin-left:-6px;border:2px solid var(--card);}
+  .avatar-stack .avatar-bubble:first-child{margin-left:0;}
+  .avatar-bubble{
+    display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;
+    font-size:9px;font-weight:700;color:#fff;flex:0 0 auto;
+  }
+  .avatar-unassigned{background:#B9C2C9;color:#fff;}
+  .avatar-extra{background:#DCE4E8;color:var(--muted);}
+  .filter-chevron{font-size:10px;color:var(--muted);}
+  .filter-dropdown{
+    position:absolute;top:calc(100% + 6px);left:0;background:var(--card);border:1px solid var(--border);
+    border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:6px;min-width:230px;max-height:320px;
+    overflow-y:auto;z-index:100;
+  }
+  .filter-row{
+    display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:6px;cursor:pointer;font-size:13px;
+  }
+  .filter-row:hover{background:var(--bg);}
+  .filter-row input[type=checkbox]{width:15px;height:15px;accent-color:var(--teal);cursor:pointer;}
+  .filter-row-name{color:var(--ink);}
+  .filter-dropdown-footer{border-top:1px solid var(--border);margin-top:4px;padding-top:6px;text-align:right;}
+  .filter-clear-btn{border:none;background:none;color:var(--teal);font-size:12px;font-weight:600;cursor:pointer;padding:4px 6px;}
+  .filter-clear-btn:hover{text-decoration:underline;}
+
+  .clickable-row{cursor:pointer;}
+  .clickable-row:hover{background:#F0F9FC !important;}
+
+  .board-scroll{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px;}
+  .board-scroll::-webkit-scrollbar{height:10px;}
+  .board-scroll::-webkit-scrollbar-track{background:var(--none-bg);border-radius:6px;}
+  .board-scroll::-webkit-scrollbar-thumb{background:#B7C2C9;border-radius:6px;}
+  .board-scroll::-webkit-scrollbar-thumb:hover{background:#95A4AD;}
+  .board{display:flex;gap:14px;width:max-content;min-width:100%;}
+  .column{min-width:250px;width:250px;flex:0 0 auto;}
+  .column-head{
+    font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;
+    padding:0 4px 10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;
+  }
+  .lock-tag{font-size:10px;background:var(--none-bg);color:var(--muted);border-radius:10px;padding:2px 8px;white-space:nowrap;}
+  .column-inner{background:#F6F6F6;border-radius:8px;padding:10px;min-height:120px;}
+  .band{border-radius:8px;padding:8px;margin-bottom:8px;}
+  .band-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:0 4px 6px;display:flex;justify-content:space-between;}
+  .band.p1{background:var(--p1-bg);} .band.p1 .band-label{color:var(--p1);}
+  .band.p2{background:var(--p2-bg);} .band.p2 .band-label{color:var(--p2);}
+  .band.p3{background:var(--p3-bg);} .band.p3 .band-label{color:var(--p3);}
+  .band.none{background:var(--none-bg);} .band.none .band-label{color:var(--muted);}
+  .card{
+    background:var(--card);border:1px solid var(--border);border-radius:6px;padding:9px 11px;
+    margin-bottom:6px;box-shadow:0 1px 2px rgba(0,0,0,.05);cursor:pointer;user-select:none;
+  }
+  .card.locked{cursor:pointer;opacity:.85;}
+  .card.dragging{opacity:.35;}
+  .card.drag-over{border-top:2px solid var(--cyan);}
+  .card-key{font-size:10px;color:var(--teal);font-weight:700;}
+  .card-title{font-size:12px;margin:3px 0 0;line-height:1.35;}
+  .card-meta{font-size:10px;color:var(--muted);margin-top:4px;display:flex;justify-content:space-between;gap:6px;}
+  .card-status-tag{font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;white-space:nowrap;}
+  .empty-note{font-size:11.5px;color:var(--muted);padding:10px 4px;}
+
+  .release-header{
+    background:linear-gradient(135deg, #F0F9FC 0%, #EAF1F5 100%);border:1px solid var(--border);
+    border-radius:10px;padding:18px 20px;margin-bottom:24px;
+  }
+  .release-title-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+  .release-title-row h2{margin:0;font-size:18px;color:var(--teal-dark);}
+  .release-days{font-size:12px;font-weight:700;background:var(--teal);color:#fff;border-radius:16px;padding:4px 12px;white-space:nowrap;}
+  .release-meta{font-size:11.5px;color:var(--muted);margin-top:4px;}
+  .release-progress-track{background:#DCE4E8;border-radius:8px;height:10px;margin-top:14px;overflow:hidden;}
+  .release-progress-fill{background:linear-gradient(90deg, var(--cyan), var(--green));height:100%;border-radius:8px;transition:width .3s ease;}
+  .release-progress-label{font-size:11.5px;color:var(--muted);margin-top:6px;}
+  .cross-badge{
+    display:inline-block;margin-top:6px;font-size:9.5px;font-weight:700;padding:3px 7px;border-radius:5px;
+  }
+  .cross-badge.band-p1{background:var(--p1-bg);color:var(--p1);}
+  .cross-badge.band-p2{background:var(--p2-bg);color:var(--p2);}
+  .cross-badge.band-p3{background:var(--p3-bg);color:var(--p3);}
+  .cross-badge.fv-badge{background:var(--purple-bg);color:var(--purple);margin-right:4px;}
+
+  .confirm-bar{
+    position:fixed;left:0;right:0;bottom:0;background:var(--teal-dark);color:#fff;display:none;
+    align-items:center;justify-content:center;gap:16px;padding:13px 20px;font-size:13px;z-index:20;flex-wrap:wrap;
+  }
+  .confirm-bar.show{display:flex;}
+  .confirm-bar button{border:none;border-radius:4px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;}
+  .btn-confirm{background:#3AAE3A;color:#04260A;}
+  .btn-discard{background:transparent;color:#D2E4F7;border:1px solid #4B87BE;}
+
+  .toast{
+    position:fixed;top:20px;right:20px;background:var(--green-bg);border:1px solid #9BDDBB;color:#0E3D0E;
+    border-radius:8px;padding:14px 16px;font-size:13px;max-width:340px;box-shadow:0 4px 12px rgba(0,0,0,.12);
+    transform:translateX(120%);transition:transform .35s ease;z-index:30;
+  }
+  .toast.show{transform:translateX(0);}
+  .toast strong{display:block;margin-bottom:3px;color:var(--green);}
+  @media (max-width:640px){
+    header{padding:16px;}
+    main{padding:0 8px 60px;}
+    .panel{padding:12px;border-radius:0 10px 10px 10px;}
+    .toolbar{flex-direction:column;align-items:stretch;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="htitle" id="pageTitle">Hoffweb Priorities</div>
+    <div class="hsub" id="pageSub">Live data pulled from Jira · this does not change anything in Jira, it only displays and exports the list below</div>
+  </div>
+  <div class="live-badge" id="liveBadge" title="Data is fetched from Jira through the proxy Function each time this page loads or Refresh is pressed."><span class="live-dot" id="liveDot"></span><span id="liveBadgeText">Loading…</span></div>
+</header>
+
+<div class="project-switch">
+  <button class="project-btn active" id="btnProjectTdp">TDP Hoffweb</button>
+  <button class="project-btn" id="btnProjectMas">MAS Board</button>
+</div>
+
+<div class="toolbar">
+  <div class="tabs">
+    <button class="tab-btn active" id="tabListaBtn">List</button>
+    <button class="tab-btn" id="tabKanbanBtn">Kanban</button>
+    <button class="tab-btn" id="tabReleaseBtn">Next Release</button>
+  </div>
+  <div class="search-wrap">
+    <span class="search-icon">🔍</span>
+    <input type="text" id="searchInput" class="search-input" placeholder="Search key, summary, assignee, status...">
+    <button class="search-clear" id="searchClear" style="display:none;" title="Clear search">✕</button>
+  </div>
+  <div class="export-bar">
+    <button class="export-btn" id="btnRefresh">🔄 Refresh</button>
+    <button class="export-btn" id="btnExportExcel">⬇ Export Excel</button>
+    <button class="export-btn" id="btnExportPdf">🖨 Export PDF</button>
+  </div>
+</div>
+
+<main>
+  <div class="panel" id="panelLista"></div>
+  <div class="panel" id="panelKanban" style="display:none;"></div>
+  <div class="panel" id="panelRelease" style="display:none;"></div>
+</main>
+
+<div class="confirm-bar" id="confirmBar">
+  <span id="pendingText">Order changed</span>
+  <button class="btn-confirm" id="btnConfirm">Confirm</button>
+  <button class="btn-discard" id="btnDiscard">Undo</button>
+</div>
+
+<div class="toast" id="toast">
+  <strong id="toastTitle">Done</strong>
+  <span id="toastBody"></span>
+</div>
+
+<script>
+const JIRA_BASE = 'https://tprodublin.atlassian.net/browse/';
+let SNAPSHOT_LABEL = 'Loading…';
+
+// ===================== Live data configuration =====================
+// TDP has no reliable "Team" field to filter on (tested: it returns a
+// completely different population, ~100+ tickets including 77 unrelated
+// Backlog items). Until that's fixed on the Jira side, TDP tracking stays
+// a manually curated key list. Add/remove keys here as scope changes —
+// this list will NOT pick up new Hoffweb tickets on its own.
+const TDP_KEYS = [
+  "TDP-2000","TDP-2213","TDP-2436","TDP-2449","TDP-2450","TDP-2506","TDP-2507",
+  "TDP-2533","TDP-2579","TDP-2635","TDP-2726","TDP-2748","TDP-2782","TDP-2789",
+  "TDP-2798","TDP-2800","TDP-1123","TDP-1870","TDP-2553","TDP-2821","TDP-1000",
+  "TDP-1205","TDP-1223","TDP-1733","TDP-1736","TDP-2317","TDP-2357","TDP-2466",
+  "TDP-2552","TDP-2574","TDP-2663","TDP-2771","TDP-2786","TDP-2787","TDP-2808",
+];
+
+// MAS has a working Team field, so this stays a real JQL filter and
+// picks up new tickets automatically.
+const MAS_JQL = 'project = MAS AND Team = "Hoffweb Workflow" AND statusCategory != Done';
+
+const JIRA_FIELDS = 'summary,assignee,issuetype,priority,status,resolution,created,components,reporter,fixVersions,issuelinks';
+
+// TDP QA-ish statuses (mirrors the st-orange grouping used elsewhere in this file)
+const TDP_QA_STATUSES = ['In QA', 'Ready for QA', 'Code Review', 'PO Review'];
+// MAS "waiting on something" statuses
+const MAS_WAITING_STATUSES = ['Awaiting Response', 'Waiting for customer', 'Waiting on QA', 'Waiting on Release', 'Awaiting Incident Report'];
+// MAS "not started yet, further out" statuses
+const MAS_UPCOMING_STATUSES = ['Triage', 'In Discovery'];
+
+let TDP_IN_PROGRESS = [];
+let TDP_QA = [];
+let TDP_TODO = [];
+let MAS_UPCOMING = [];
+let MAS_IN_PROGRESS = [];
+let MAS_WAITING = [];
+let MAS_TODO = [];
+
+let TDP_ORIGINAL_ORDER = [];
+let MAS_ORIGINAL_ORDER = [];
+
+const NEXT_RELEASE = null;
+const NEXT_RELEASE_TDP = [];
+// The "Next Release" tab still isn't wired to live data — it needs a
+// separate call to find the next unreleased "HoffWeb x.x.x" version and
+// pull tickets tagged to it. Left as a placeholder for now.
+
+function formatJiraDate(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// Extracts linked issue keys of a given prefix (e.g. "MAS" or "TDP") from
+// an issue's issuelinks field, regardless of link direction.
+function extractLinkedKeys(issuelinks, prefix) {
+  if (!Array.isArray(issuelinks)) return [];
+  const keys = [];
+  issuelinks.forEach(link => {
+    const linked = link.outwardIssue || link.inwardIssue;
+    if (linked && linked.key && linked.key.startsWith(prefix + '-')) {
+      keys.push(linked.key);
+    }
+  });
+  return keys;
+}
+
+function mapIssue(issue, crossRefPrefix, crossRefField) {
+  const f = issue.fields || {};
+  const mapped = {
+    key: issue.key,
+    summary: f.summary || '',
+    assignee: f.assignee ? f.assignee.displayName : null,
+    type: f.issuetype ? f.issuetype.name : null,
+    priority: f.priority ? f.priority.name : null,
+    status: f.status ? f.status.name : null,
+    resolution: f.resolution ? f.resolution.name : null,
+    created: formatJiraDate(f.created),
+    components: (f.components || []).map(c => c.name),
+    reporter: f.reporter ? f.reporter.displayName : null,
+    fixVersions: (f.fixVersions || []).map(v => v.name),
+  };
+  mapped[crossRefField] = extractLinkedKeys(f.issuelinks, crossRefPrefix);
+  return mapped;
+}
+
+// Fetches every page for a JQL query through the proxy Function.
+// Uses /rest/api/3/search/jql (the old /rest/api/3/search endpoint was
+// fully removed by Atlassian), paginating with nextPageToken. Capped at
+// 20 pages as a safety net against known nextPageToken pagination bugs.
+async function fetchAllIssues(jql) {
+  const issues = [];
+  let nextPageToken = null;
+  let page = 0;
+
+  do {
+    const params = new URLSearchParams({ jql, fields: JIRA_FIELDS, maxResults: '100' });
+    if (nextPageToken) params.set('nextPageToken', nextPageToken);
+
+    const res = await fetch(`/api/jira/rest/api/3/search/jql?${params.toString()}`);
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Jira search failed (${res.status}): ${body}`);
+    }
+    const data = await res.json();
+    issues.push(...(data.issues || []));
+    nextPageToken = data.nextPageToken || null;
+    page++;
+  } while (nextPageToken && page < 20);
+
+  return issues;
+}
+
+function bucketTdp(issues) {
+  const mapped = issues.map(it => mapIssue(it, 'MAS', 'linkedMas'));
+  TDP_IN_PROGRESS = mapped.filter(it => it.status === 'In Progress');
+  TDP_QA = mapped.filter(it => TDP_QA_STATUSES.includes(it.status));
+  TDP_TODO = mapped.filter(it => !TDP_QA_STATUSES.includes(it.status) && it.status !== 'In Progress');
+}
+
+function bucketMas(issues) {
+  const mapped = issues.map(it => mapIssue(it, 'TDP', 'linkedTdp'));
+  MAS_UPCOMING = mapped.filter(it => MAS_UPCOMING_STATUSES.includes(it.status));
+  MAS_IN_PROGRESS = mapped.filter(it => it.status === 'In Progress');
+  MAS_WAITING = mapped.filter(it => MAS_WAITING_STATUSES.includes(it.status));
+  MAS_TODO = mapped.filter(it =>
+    !MAS_UPCOMING_STATUSES.includes(it.status) &&
+    it.status !== 'In Progress' &&
+    !MAS_WAITING_STATUSES.includes(it.status)
+  );
+}
+
+function setLiveBadge(state, text) {
+  const dot = document.getElementById('liveDot');
+  const label = document.getElementById('liveBadgeText');
+  dot.className = 'live-dot' + (state ? ' ' + state : '');
+  if (text) label.textContent = text;
+}
+
+async function loadLiveData() {
+  setLiveBadge('loading', 'Loading from Jira…');
+  try {
+    const tdpJql = `key in (${TDP_KEYS.join(',')})`;
+    const [tdpIssues, masIssues] = await Promise.all([
+      fetchAllIssues(tdpJql),
+      fetchAllIssues(MAS_JQL),
+    ]);
+
+    bucketTdp(tdpIssues);
+    bucketMas(masIssues);
+
+    TDP_ORIGINAL_ORDER = TDP_TODO.map(c => c.key);
+    MAS_ORIGINAL_ORDER = MAS_TODO.map(c => c.key);
+
+    const now = new Date();
+    SNAPSHOT_LABEL = `Last synced ${now.toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit'}).replace(/\//g,'-')} / ${now.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'})}`;
+    setLiveBadge('ok');
+    return true;
+  } catch (err) {
+    console.error('Failed to load live Jira data', err);
+    setLiveBadge('error', 'Failed to load — see console');
+    return false;
+  }
+}
+
+// Priority bands used on each project's draggable "To Do" column
+const BANDS = [
+  {key:'p1', label:'Priority 1', cls:'p1', size:6},
+  {key:'p2', label:'Priority 2', cls:'p2', size:6},
+  {key:'p3', label:'Priority 3', cls:'p3', size:12},
+  {key:'none', label:'No priority', cls:'none', size:Infinity},
+];
+function bandForIndex(i){
+  let acc = 0;
+  for(const b of BANDS){ acc += b.size; if(i < acc) return b; }
+  return BANDS[BANDS.length-1];
+}
+function bandLookupFor(todoArray){
+  const lookup = {};
+  todoArray.forEach((it, i) => { lookup[it.key] = bandForIndex(i).label; });
+  return lookup;
+}
+
+// ===================== Project configuration =====================
+let currentProject = 'MAS';
+
+const PROJECTS = {
+  TDP: {
+    title: 'TDP Hoffweb — Priorities',
+    sub: 'Team: HoffWeb Workflow',
+    totalCases: () => TDP_IN_PROGRESS.length + TDP_QA.length + TDP_TODO.length,
+    listGroups: () => {
+      const order = ['Backlog','To Do','In Progress','Code Review','Ready for QA','PO Review','In QA'];
+      const all = [...TDP_IN_PROGRESS, ...TDP_QA, ...TDP_TODO];
+      return order.map(st => ({label: st, items: all.filter(it => it.status === st)})).filter(g => g.items.length > 0);
+    },
+    allRecords: () => [...TDP_IN_PROGRESS, ...TDP_QA, ...TDP_TODO],
+    statusPillClass: (status) => {
+      if(status === 'In Progress') return 'st-green';
+      if(['In QA','Ready for QA','Code Review','PO Review'].includes(status)) return 'st-orange';
+      return 'st-plain';
+    },
+    todoArray: () => TDP_TODO,
+    setTodoArray: (arr) => { TDP_TODO = arr; },
+    originalOrder: () => TDP_ORIGINAL_ORDER,
+    setOriginalOrder: (arr) => { TDP_ORIGINAL_ORDER = arr; },
+    linkedField: 'linkedMas',
+    linkedLabel: 'Linked MAS Issue',
+    kanbanColumns: () => [
+      {label:'To Do', items: null, locked:false},
+      {label:'In Progress', items: TDP_IN_PROGRESS, locked:true, showStatus:false},
+      {label:'QA', items: TDP_QA, locked:true, showStatus:true},
+    ],
+    crossRefFrom: null,
+    exportFileName: 'TDP_Hoffweb_Priorities',
+    exportCols: [{wch:10},{wch:10},{wch:60},{wch:18},{wch:10},{wch:12},{wch:14},{wch:12},{wch:12},{wch:24},{wch:16},{wch:14},{wch:18}],
+  },
+  MAS: {
+    title: 'MAS Board — Priorities',
+    sub: 'Team: Hoffweb Workflow',
+    totalCases: () => MAS_UPCOMING.length + MAS_IN_PROGRESS.length + MAS_WAITING.length + MAS_TODO.length,
+    listGroups: () => {
+      const order = ['Triage','In Discovery','To Do','In Progress','Awaiting Response','Waiting for customer','Waiting on QA','Waiting on Release','Awaiting Incident Report'];
+      const all = [...MAS_UPCOMING, ...MAS_IN_PROGRESS, ...MAS_WAITING, ...MAS_TODO];
+      return order.map(st => ({label: st, items: all.filter(it => it.status === st)})).filter(g => g.items.length > 0);
+    },
+    allRecords: () => [...MAS_UPCOMING, ...MAS_IN_PROGRESS, ...MAS_WAITING, ...MAS_TODO],
+    statusPillClass: (status) => {
+      if(status === 'In Progress') return 'st-green';
+      if(['Awaiting Response','Waiting for customer','Waiting on Release','Waiting on QA','Awaiting Incident Report'].includes(status)) return 'st-orange';
+      return 'st-plain';
+    },
+    todoArray: () => MAS_TODO,
+    setTodoArray: (arr) => { MAS_TODO = arr; },
+    originalOrder: () => MAS_ORIGINAL_ORDER,
+    setOriginalOrder: (arr) => { MAS_ORIGINAL_ORDER = arr; },
+    linkedField: 'linkedTdp',
+    linkedLabel: 'Linked TDP Issue',
+    kanbanColumns: () => [
+      {label:'Upcoming', items: MAS_UPCOMING, locked:true},
+      {label:'To Do', items: null, locked:false},
+      {label:'In Progress', items: MAS_IN_PROGRESS, locked:true, showStatus:false},
+      {label:'Waiting', items: MAS_WAITING, locked:true, showStatus:true},
+    ],
+    crossRefFrom: 'TDP',
+    exportFileName: 'MAS_Hoffweb_Priorities',
+    exportCols: [{wch:10},{wch:10},{wch:60},{wch:18},{wch:10},{wch:16},{wch:14},{wch:12},{wch:12},{wch:24},{wch:16},{wch:14},{wch:18}],
+  },
+};
+
+function proj(){ return PROJECTS[currentProject]; }
+
+function updateHeader(){
+  document.getElementById('pageTitle').textContent = proj().title;
+  document.getElementById('pageSub').textContent = `Live data pulled from Jira · ${proj().sub} · this does not change anything in Jira, it only displays and exports the list below`;
+  document.getElementById('liveBadgeText').textContent = `${proj().totalCases()} active cases · ${SNAPSHOT_LABEL}`;
+}
+
+// ---- List tab ----
+const collapsedGroups = new Set();
+
+// Looks up a TDP record by key across all of TDP's status buckets — used to pull
+// Fix Version onto MAS rows via the live cross-reference (MAS itself has no Fix
+// Version field populated; TDP dev tickets do).
+function findTdpRecord(key){
+  const all = [...TDP_IN_PROGRESS, ...TDP_QA, ...TDP_TODO];
+  return all.find(r => r.key === key) || null;
+}
+
+function fixVersionHtml(it){
+  if(it.fixVersions && it.fixVersions.length){
+    return it.fixVersions.map(v => `<span class="comp-chip fv-chip">${v}</span>`).join('');
+  }
+  // No Fix Version set directly on this record — try the linked TDP ticket instead.
+  const cfg = proj();
+  if(cfg.crossRefFrom === 'TDP'){
+    const linked = it.linkedTdp || [];
+    const chips = [];
+    linked.forEach(tdpKey => {
+      const tdpRec = findTdpRecord(tdpKey);
+      if(tdpRec && tdpRec.fixVersions && tdpRec.fixVersions.length){
+        tdpRec.fixVersions.forEach(v => chips.push(`<span class="comp-chip fv-chip fv-chip-derived" title="Set on linked ${tdpKey}, not on ${it.key} itself">${v} <span class="fv-via">via ${tdpKey}</span></span>`));
+      }
+    });
+    if(chips.length) return chips.join('');
+  }
+  return '<span class="cell-muted">—</span>';
+}
+
+function rowHtml(it){
+  const comps = (it.components && it.components.length)
+    ? it.components.map(c => `<span class="comp-chip">${c}</span>`).join('')
+    : '<span class="cell-muted">—</span>';
+  const linked = it[proj().linkedField];
+  const linkedHtml = (linked && linked.length)
+    ? linked.map(l => `<span class="comp-chip link-chip">${l}</span>`).join('')
+    : '<span class="cell-muted">—</span>';
+  return `
+    <tr class="clickable-row" data-key="${it.key}" title="Open ${it.key} in Jira">
+      <td class="col-type"><span class="type-pill">${it.type || '—'}</span></td>
+      <td class="col-key cell-key">${it.key}</td>
+      <td class="col-summary">${it.summary}</td>
+      <td class="col-reporter cell-muted">${it.reporter || '—'}</td>
+      <td class="col-priority">${it.priority || '—'}</td>
+      <td class="col-status"><span class="status-pill ${proj().statusPillClass(it.status)}">${it.status || '—'}</span></td>
+      <td class="col-resolution cell-muted">${it.resolution || '—'}</td>
+      <td class="col-created cell-muted">${it.created || '—'}</td>
+      <td class="col-components">${comps}</td>
+      <td class="col-fixversion">${fixVersionHtml(it)}</td>
+      <td class="col-linked">${linkedHtml}</td>
+    </tr>`;
+}
+
+function renderLista(){
+  const panel = document.getElementById('panelLista');
+  panel.innerHTML = '';
+  const groups = proj().listGroups()
+    .map(g => ({label: g.label, items: g.items.filter(matchesSearch)}))
+    .filter(g => g.items.length > 0 || !searchTerm);
+
+  if(searchTerm && groups.every(g => g.items.length === 0)){
+    panel.innerHTML = `<div class="empty-note">No results for "${searchTerm}".</div>`;
+    return;
+  }
+
+  groups.forEach(g => {
+    const isCollapsed = collapsedGroups.has(currentProject + ':' + g.label);
+    const groupEl = document.createElement('div');
+    groupEl.className = 'status-group' + (isCollapsed ? ' collapsed' : '');
+
+    const head = document.createElement('div');
+    head.className = 'status-head';
+    head.innerHTML = `<h3>${g.label}</h3><span class="status-count">${g.items.length}</span><span class="collapse-chevron">${'\u25BE'}</span>`;
+    head.addEventListener('click', () => {
+      const k = currentProject + ':' + g.label;
+      if(collapsedGroups.has(k)) collapsedGroups.delete(k);
+      else collapsedGroups.add(k);
+      renderLista();
+    });
+    groupEl.appendChild(head);
+
+    if(!isCollapsed){
+      const scrollWrap = document.createElement('div');
+      scrollWrap.className = 'table-scroll';
+      scrollWrap.innerHTML = `
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="col-type">Type</th>
+              <th class="col-key">Key</th>
+              <th class="col-summary">Summary</th>
+              <th class="col-reporter">Reporter</th>
+              <th class="col-priority">Priority</th>
+              <th class="col-status">Status</th>
+              <th class="col-resolution">Resolution</th>
+              <th class="col-created">Created at</th>
+              <th class="col-components">Components</th>
+              <th class="col-fixversion">Fix Version</th>
+              <th class="col-linked">${proj().linkedLabel}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${g.items.map(rowHtml).join('')}
+          </tbody>
+        </table>
+      `;
+      groupEl.appendChild(scrollWrap);
+    }
+
+    panel.appendChild(groupEl);
+  });
+}
+
+// ---- Kanban tab ----
+let dragKey = null;
+let selectedAssignees = new Set();
+let filterDropdownOpen = false;
+
+const AVATAR_COLORS = ['#3B7DD8','#8B5CF6','#0EA5A5','#E8734A','#D13438','#1B8A5A','#CA5010','#5B7182'];
+function colorForName(name){
+  let hash = 0;
+  for(let i=0;i<name.length;i++) hash = (hash*31 + name.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+}
+function initialsForName(name){
+  if(!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  if(parts.length === 1) return parts[0].slice(0,2).toUpperCase();
+  return (parts[0][0] + parts[parts.length-1][0]).toUpperCase();
+}
+function avatarHtml(name){
+  if(name === 'Unassigned' || !name){
+    return `<span class="avatar-bubble avatar-unassigned">—</span>`;
+  }
+  return `<span class="avatar-bubble" style="background:${colorForName(name)}">${initialsForName(name)}</span>`;
+}
+
+function allAssignees(){
+  const set = new Set();
+  proj().allRecords().forEach(it => { if(it.assignee) set.add(it.assignee); });
+  return [...set].sort();
+}
+
+let searchTerm = '';
+function matchesSearch(it){
+  if(!searchTerm) return true;
+  const cfg = proj();
+  const haystack = [
+    it.key, it.summary, it.assignee, it.reporter, it.status, it.priority,
+    ...(it.components || []), ...(it.fixVersions || []), ...(it[cfg.linkedField] || []),
+  ].filter(Boolean).join(' ').toLowerCase();
+  return haystack.includes(searchTerm);
+}
+
+function matchesFilter(it){
+  if(selectedAssignees.size === 0) return true;
+  if(!it.assignee) return selectedAssignees.has('Unassigned');
+  return selectedAssignees.has(it.assignee);
+}
+
+function matchesAll(it){
+  return matchesFilter(it) && matchesSearch(it);
+}
+
+document.getElementById('searchInput').addEventListener('input', (e) => {
+  searchTerm = e.target.value.trim().toLowerCase();
+  document.getElementById('searchClear').style.display = searchTerm ? '' : 'none';
+  renderLista();
+  renderKanban();
+});
+document.getElementById('searchClear').addEventListener('click', () => {
+  searchTerm = '';
+  document.getElementById('searchInput').value = '';
+  document.getElementById('searchClear').style.display = 'none';
+  renderLista();
+  renderKanban();
+});
+
+function renderFilterBar(){
+  const wrap = document.createElement('div');
+  wrap.className = 'filter-wrap';
+
+  const names = allAssignees();
+  const stackNames = names.slice(0, 5);
+  const extra = names.length - stackNames.length;
+
+  const trigger = document.createElement('button');
+  trigger.className = 'filter-trigger';
+  trigger.innerHTML = `
+    <span class="avatar-stack">
+      ${stackNames.map(avatarHtml).join('')}
+      ${extra > 0 ? `<span class="avatar-bubble avatar-extra">+${extra}</span>` : ''}
+    </span>
+    <span class="filter-trigger-label">Assignee${selectedAssignees.size ? ` (${selectedAssignees.size})` : ''}</span>
+    <span class="filter-chevron">${filterDropdownOpen ? '\u25B4' : '\u25BE'}</span>
+  `;
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    filterDropdownOpen = !filterDropdownOpen;
+    renderKanban();
+  });
+  wrap.appendChild(trigger);
+
+  if(filterDropdownOpen){
+    const panelEl = document.createElement('div');
+    panelEl.className = 'filter-dropdown';
+    const rows = [...names, 'Unassigned'];
+    panelEl.innerHTML = rows.map(name => {
+      const checked = selectedAssignees.has(name) ? 'checked' : '';
+      return `
+        <label class="filter-row">
+          <input type="checkbox" data-name="${name}" ${checked}>
+          ${avatarHtml(name)}
+          <span class="filter-row-name">${name}</span>
+        </label>`;
+    }).join('') + `<div class="filter-dropdown-footer"><button class="filter-clear-btn">Clear filter</button></div>`;
+
+    panelEl.querySelectorAll('input[type=checkbox]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const name = cb.dataset.name;
+        if(cb.checked) selectedAssignees.add(name);
+        else selectedAssignees.delete(name);
+        renderKanban();
+      });
+    });
+    panelEl.querySelector('.filter-clear-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectedAssignees.clear();
+      renderKanban();
+    });
+    wrap.appendChild(panelEl);
+  }
+
+  return wrap;
+}
+
+document.addEventListener('click', (e) => {
+  if(!filterDropdownOpen) return;
+  if(!e.target.closest('.filter-wrap')){
+    filterDropdownOpen = false;
+    renderKanban();
+  }
+});
+
+function crossRefBadgeHtml(it){
+  const cfg = proj();
+  if(!cfg.crossRefFrom) return '';
+  const otherCfg = PROJECTS[cfg.crossRefFrom];
+  const linked = it[cfg.linkedField];
+  if(!linked || !linked.length) return '';
+  const lookup = bandLookupFor(otherCfg.todoArray());
+  const hits = linked.filter(k => lookup[k]);
+  if(!hits.length) return '';
+  return hits.map(k => {
+    const band = lookup[k];
+    const cls = band === 'Priority 1' ? 'p1' : band === 'Priority 2' ? 'p2' : 'p3';
+    return `<span class="cross-badge band-${cls}" data-cross="${k}" title="Open ${k} in Jira">🔗 ${k} · ${band} in ${cfg.crossRefFrom} To Do</span>`;
+  }).join('');
+}
+
+function fixVersionBadge(it){
+  if(!it.fixVersions || !it.fixVersions.length) return '';
+  return it.fixVersions.map(v => `<span class="cross-badge fv-badge">🚀 ${v}</span>`).join('');
+}
+
+function cardHtml(it, locked, showStatus){
+  const statusTag = showStatus ? `<span class="card-status-tag status-pill ${proj().statusPillClass(it.status)}">${it.status}</span>` : '';
+  return `<div class="card${locked ? ' locked' : ''}" data-key="${it.key}" title="Open ${it.key} in Jira">
+    <div class="card-key">${it.key}</div>
+    <div class="card-title">${it.summary}</div>
+    <div class="card-meta"><span>${it.assignee || '—'}</span>${statusTag}</div>
+    ${fixVersionBadge(it)}
+    ${crossRefBadgeHtml(it)}
+  </div>`;
+}
+
+function emptyNote(){
+  return `<div class="empty-note">No cases for this assignee.</div>`;
+}
+
+function renderKanban(){
+  const panel = document.getElementById('panelKanban');
+  panel.innerHTML = '';
+  panel.appendChild(renderFilterBar());
+
+  const scrollWrap = document.createElement('div');
+  scrollWrap.className = 'board-scroll';
+  const board = document.createElement('div');
+  board.className = 'board';
+  scrollWrap.appendChild(board);
+
+  const isFiltered = selectedAssignees.size > 0 || !!searchTerm;
+  const columns = proj().kanbanColumns();
+
+  columns.forEach(colDef => {
+    const col = document.createElement('div');
+    col.className = 'column';
+    if(colDef.items === null){
+      const tag = currentProject !== 'MAS' ? '🔒 read-only' : (isFiltered ? 'filtered view' : 'drag to prioritize');
+      col.innerHTML = `<div class="column-head"><span>${colDef.label}</span><span class="lock-tag">${tag}</span></div>
+        <div class="column-inner" id="todoInner"></div>`;
+    } else {
+      const items = colDef.items.filter(matchesAll);
+      col.innerHTML = `<div class="column-head"><span>${colDef.label}</span><span class="lock-tag">🔒 read-only</span></div>
+        <div class="column-inner">${items.length ? items.map(it => cardHtml(it, true, colDef.showStatus)).join('') : emptyNote()}</div>`;
+    }
+    board.appendChild(col);
+  });
+
+  panel.appendChild(scrollWrap);
+  panel.querySelectorAll('.card[data-key]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if(e.target.closest('.cross-badge')) return;
+      window.open(JIRA_BASE + el.dataset.key, '_blank');
+    });
+  });
+  renderTodoInner();
+}
+
+function renderTodoInner(){
+  const inner = document.getElementById('todoInner');
+  if(!inner) return;
+  inner.innerHTML = '';
+  const TODO = proj().todoArray();
+
+  if(selectedAssignees.size > 0 || searchTerm){
+    const items = TODO.filter(matchesAll);
+    if(!items.length){ inner.innerHTML = emptyNote(); return; }
+    items.forEach(it => {
+      const el = document.createElement('div');
+      el.className = 'card locked';
+      el.dataset.key = it.key;
+      el.title = `Open ${it.key} in Jira`;
+      el.innerHTML = `<div class="card-key">${it.key}</div><div class="card-title">${it.summary}</div><div class="card-meta"><span>${it.assignee || '—'}</span></div>${fixVersionBadge(it)}${crossRefBadgeHtml(it)}`;
+      el.addEventListener('click', (e) => {
+        if(e.target.closest('.cross-badge')) return;
+        window.open(JIRA_BASE + it.key, '_blank');
+      });
+      inner.appendChild(el);
+    });
+    attachCrossBadgeHandlers(inner);
+    return;
+  }
+
+  let currentBandKey = null;
+  let bandDiv = null;
+
+  TODO.forEach((it, i) => {
+    const band = bandForIndex(i);
+    if(band.key !== currentBandKey){
+      currentBandKey = band.key;
+      bandDiv = document.createElement('div');
+      bandDiv.className = 'band ' + band.cls;
+      const count = Math.min(band.size, TODO.length - i);
+      bandDiv.innerHTML = `<div class="band-label"><span>${band.label}</span><span>${count}${band.size !== Infinity ? '/' + band.size : ''}</span></div>`;
+      inner.appendChild(bandDiv);
+    }
+    const el = document.createElement('div');
+    const canDrag = currentProject === 'MAS';
+    el.className = 'card' + (canDrag ? '' : ' locked');
+    el.draggable = canDrag;
+    el.dataset.key = it.key;
+    el.title = `Open ${it.key} in Jira`;
+    el.innerHTML = `<div class="card-key">${it.key}</div><div class="card-title">${it.summary}</div><div class="card-meta"><span>${it.assignee || '—'}</span></div>${fixVersionBadge(it)}${crossRefBadgeHtml(it)}`;
+
+    if(canDrag){
+      let didDrag = false;
+      el.addEventListener('dragstart', () => { didDrag = true; dragKey = it.key; el.classList.add('dragging'); });
+      el.addEventListener('dragend', () => { el.classList.remove('dragging'); renderTodoInner(); checkChanges(); });
+      el.addEventListener('dragover', (e) => { e.preventDefault(); el.classList.add('drag-over'); });
+      el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+      el.addEventListener('drop', (e) => {
+        e.preventDefault();
+        el.classList.remove('drag-over');
+        const arr = proj().todoArray();
+        const fromIdx = arr.findIndex(c => c.key === dragKey);
+        const toIdx = arr.findIndex(c => c.key === it.key);
+        if(fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+        const [moved] = arr.splice(fromIdx, 1);
+        arr.splice(toIdx, 0, moved);
+      });
+      el.addEventListener('click', (e) => {
+        if(e.target.closest('.cross-badge')){ return; }
+        if(didDrag){ didDrag = false; return; }
+        window.open(JIRA_BASE + it.key, '_blank');
+      });
+    } else {
+      el.addEventListener('click', (e) => {
+        if(e.target.closest('.cross-badge')) return;
+        window.open(JIRA_BASE + it.key, '_blank');
+      });
+    }
+
+    bandDiv.appendChild(el);
+  });
+  attachCrossBadgeHandlers(inner);
+}
+
+function attachCrossBadgeHandlers(container){
+  container.querySelectorAll('.cross-badge[data-cross]').forEach(badge => {
+    badge.addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.open(JIRA_BASE + badge.dataset.cross, '_blank');
+    });
+  });
+}
+
+function checkChanges(){
+  if(currentProject !== 'MAS') return;
+  const TODO = proj().todoArray();
+  const original = proj().originalOrder();
+  const newOrder = TODO.map(c => c.key);
+  const changed = newOrder.some((k, i) => k !== original[i]);
+  const bar = document.getElementById('confirmBar');
+  if(changed){
+    bar.classList.add('show');
+    const n = newOrder.filter((k,i) => k !== original[i]).length;
+    document.getElementById('pendingText').textContent = 'Order changed — ' + n + ' card(s) moved position';
+  } else {
+    bar.classList.remove('show');
+  }
+}
+
+document.getElementById('btnDiscard').addEventListener('click', () => {
+  const original = proj().originalOrder();
+  const arr = proj().todoArray();
+  arr.sort((a,b) => original.indexOf(a.key) - original.indexOf(b.key));
+  renderTodoInner();
+  document.getElementById('confirmBar').classList.remove('show');
+});
+
+document.getElementById('btnConfirm').addEventListener('click', () => {
+  proj().setOriginalOrder(proj().todoArray().map(c => c.key));
+  document.getElementById('confirmBar').classList.remove('show');
+  saveTodoOrder().then(saved => {
+    showToast('Order confirmed', saved
+      ? 'Saved — this order is now what everyone sees when they open the dashboard.'
+      : 'Order updated for this session, but saving it failed — reloading the page may reset it. Check the Function logs.');
+  });
+  renderLista();
+});
+
+// ---- Persistence of the To Do priority order ----
+// Backed by the /api/todo-order Function (Azure Table Storage), so it
+// survives reloads for everyone viewing the dashboard — it's one shared
+// order per project, not a personal one per user.
+async function saveTodoOrder(){
+  if(currentProject !== 'MAS') return false;
+  try {
+    const order = proj().todoArray().map(it => it.key);
+    const res = await fetch(`/api/todo-order/${currentProject}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order }),
+    });
+    return res.ok;
+  } catch(e) {
+    return false;
+  }
+}
+
+async function restoreTodoOrder(){
+  if(currentProject !== 'MAS') return;
+  try {
+    const res = await fetch(`/api/todo-order/${currentProject}`);
+    if(!res.ok) return;
+    const data = await res.json();
+    if(!data.order) return;
+    const savedOrder = data.order;
+    const arr = proj().todoArray();
+    const byKey = new Map(arr.map(it => [it.key, it]));
+    const reordered = [];
+    savedOrder.forEach(k => { if(byKey.has(k)){ reordered.push(byKey.get(k)); byKey.delete(k); } });
+    byKey.forEach(it => reordered.push(it)); // newly-synced items not in the saved order go last
+    proj().setTodoArray(reordered);
+    proj().setOriginalOrder(reordered.map(it => it.key));
+    renderTodoInner();
+  } catch(e) {
+    // no saved order yet, or the Function is unreachable — fall back to the default order silently
+  }
+}
+
+function showToast(title, body){
+  document.getElementById('toastTitle').textContent = title;
+  document.getElementById('toastBody').textContent = body;
+  const t = document.getElementById('toast');
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 6000);
+}
+
+// ---- Project switch ----
+function switchProject(p){
+  currentProject = p;
+  document.getElementById('btnProjectTdp').classList.toggle('active', p === 'TDP');
+  document.getElementById('btnProjectMas').classList.toggle('active', p === 'MAS');
+  selectedAssignees.clear();
+  filterDropdownOpen = false;
+  searchTerm = '';
+  document.getElementById('searchInput').value = '';
+  document.getElementById('searchClear').style.display = 'none';
+  document.getElementById('confirmBar').classList.remove('show');
+  updateHeader();
+  restoreTodoOrder();
+  renderLista();
+  renderKanban();
+}
+document.getElementById('btnProjectTdp').addEventListener('click', () => switchProject('TDP'));
+document.getElementById('btnProjectMas').addEventListener('click', () => switchProject('MAS'));
+
+// ---- Next Release tab ----
+function nextReleaseMasMatches(){
+  const tdpKeys = new Set(NEXT_RELEASE_TDP.map(r => r.key));
+  const allMas = [...MAS_UPCOMING, ...MAS_IN_PROGRESS, ...MAS_WAITING, ...MAS_TODO];
+  return allMas.filter(it => (it.linkedTdp || []).some(k => tdpKeys.has(k)));
+}
+
+function releaseRowHtml(it, tdpStatusFor){
+  const statusText = tdpStatusFor ? tdpStatusFor(it) : it.status;
+  const comps = (it.components && it.components.length)
+    ? it.components.map(c => `<span class="comp-chip">${c}</span>`).join('')
+    : '<span class="cell-muted">—</span>';
+  return `
+    <tr class="clickable-row" data-key="${it.key}" title="Open ${it.key} in Jira">
+      <td class="col-key cell-key" style="width:82px;">${it.key}</td>
+      <td>${it.summary}</td>
+      <td class="cell-muted" style="width:130px;">${it.assignee || '—'}</td>
+      <td style="width:150px;"><span class="status-pill ${statusPillClassForAny(statusText)}">${statusText}</span></td>
+      <td style="width:220px;">${comps}</td>
+    </tr>`;
+}
+
+function statusPillClassForAny(status){
+  if(status === 'Done') return 'st-green';
+  if(['Ready for QA','In QA','Code Review'].includes(status)) return 'st-orange';
+  return 'st-plain';
+}
+
+function renderRelease(){
+  const panel = document.getElementById('panelRelease');
+  panel.innerHTML = '';
+
+  if(!NEXT_RELEASE || NEXT_RELEASE_TDP.length === 0){
+    panel.innerHTML = `
+      <div class="release-header">
+        <div class="release-title-row"><h2>No upcoming Hoffweb release tracked</h2></div>
+        <div class="release-meta">At the time of the last refresh, no unreleased "HoffWeb x.x.x" version had any tickets tagged to it in Jira. This isn't an error — it usually means the previous release just shipped and the next one hasn't been scoped yet. Ask for a refresh once a new version starts collecting tickets.</div>
+      </div>`;
+    return;
+  }
+
+  const done = NEXT_RELEASE_TDP.filter(r => r.status === 'Done');
+  const notDone = NEXT_RELEASE_TDP.filter(r => r.status !== 'Done');
+  const total = NEXT_RELEASE_TDP.length;
+  const pct = Math.round((done.length / total) * 100);
+
+  const release = new Date(NEXT_RELEASE.releaseDate + 'T00:00:00');
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const msPerDay = 24*60*60*1000;
+  const daysLeft = Math.round((release - today) / msPerDay);
+  const daysLabel = daysLeft > 0 ? `${daysLeft} day${daysLeft === 1 ? '' : 's'} to go`
+    : daysLeft === 0 ? 'Releasing today' : `${Math.abs(daysLeft)} day${Math.abs(daysLeft) === 1 ? '' : 's'} overdue`;
+
+  const header = document.createElement('div');
+  header.className = 'release-header';
+  header.innerHTML = `
+    <div class="release-title-row">
+      <h2>${NEXT_RELEASE.version}</h2>
+      <span class="release-days">${daysLabel}</span>
+    </div>
+    <div class="release-meta">Target date: ${release.toLocaleDateString('en-GB', {day:'numeric', month:'long', year:'numeric'})} · Hoffweb · confirmed unreleased in Jira at time of last refresh</div>
+    <div class="release-progress-track"><div class="release-progress-fill" style="width:${pct}%"></div></div>
+    <div class="release-progress-label">${done.length} of ${total} TDP tickets done (${pct}%) — ${notDone.length} still in progress</div>
+  `;
+  panel.appendChild(header);
+
+  const tdpSection = document.createElement('div');
+  tdpSection.className = 'status-group';
+  tdpSection.innerHTML = `<div class="status-head" style="cursor:default;"><h3>TDP tickets in this release</h3><span class="status-count">${total}</span></div>`;
+  const tdpTableWrap = document.createElement('div');
+  tdpTableWrap.className = 'table-scroll';
+  tdpTableWrap.innerHTML = `
+    <table class="data-table" style="min-width:820px;">
+      <thead><tr><th>Key</th><th>Summary</th><th>Assignee</th><th>Status</th><th>Components</th></tr></thead>
+      <tbody>
+        ${[...notDone, ...done].map(it => releaseRowHtml(it)).join('')}
+      </tbody>
+    </table>`;
+  tdpSection.appendChild(tdpTableWrap);
+  panel.appendChild(tdpSection);
+
+  const masMatches = nextReleaseMasMatches();
+  const masSection = document.createElement('div');
+  masSection.className = 'status-group';
+  masSection.innerHTML = `<div class="status-head" style="cursor:default;"><h3>MAS tickets waiting on this release</h3><span class="status-count">${masMatches.length}</span></div>`;
+  const masTableWrap = document.createElement('div');
+  masTableWrap.className = 'table-scroll';
+  masTableWrap.innerHTML = masMatches.length ? `
+    <table class="data-table" style="min-width:900px;">
+      <thead><tr><th>Key</th><th>Summary</th><th>Assignee</th><th>MAS Status</th><th>Linked TDP</th></tr></thead>
+      <tbody>
+        ${masMatches.map(it => `
+          <tr class="clickable-row" data-key="${it.key}" title="Open ${it.key} in Jira">
+            <td class="col-key cell-key" style="width:82px;">${it.key}</td>
+            <td>${it.summary}</td>
+            <td class="cell-muted" style="width:130px;">${it.assignee || '—'}</td>
+            <td style="width:170px;"><span class="status-pill ${statusPillClassForAny(it.status)}">${it.status}</span></td>
+            <td style="width:150px;">${(it.linkedTdp||[]).map(k => `<span class="comp-chip link-chip">${k}</span>`).join('')}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>` : `<div class="empty-note">No MAS tickets currently linked to this release.</div>`;
+  masSection.appendChild(masTableWrap);
+  panel.appendChild(masSection);
+
+  panel.querySelectorAll('.clickable-row').forEach(row => {
+    row.addEventListener('click', () => window.open(JIRA_BASE + row.dataset.key, '_blank'));
+  });
+}
+
+// ---- Tabs ----
+document.getElementById('panelLista').addEventListener('click', (e) => {
+  const row = e.target.closest('.clickable-row');
+  if(row) window.open(JIRA_BASE + row.dataset.key, '_blank');
+});
+
+const TABS = ['Lista', 'Kanban', 'Release'];
+function showTab(name){
+  TABS.forEach(t => {
+    document.getElementById(`tab${t}Btn`).classList.toggle('active', t === name);
+    document.getElementById(`panel${t}`).style.display = t === name ? '' : 'none';
+  });
+  if(name === 'Release') renderRelease();
+}
+document.getElementById('tabListaBtn').addEventListener('click', () => showTab('Lista'));
+document.getElementById('tabKanbanBtn').addEventListener('click', () => showTab('Kanban'));
+document.getElementById('tabReleaseBtn').addEventListener('click', () => showTab('Release'));
+
+// ---- Export ----
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+document.getElementById('btnExportExcel').addEventListener('click', () => {
+  const cfg = proj();
+  const rows = [];
+  rows.push(['Type', 'Key', 'Summary', 'Reporter', 'Priority', 'Status', 'Band (To Do)', 'Resolution', 'Created at', 'Components', 'Fix Version', cfg.linkedLabel, 'Assignee']);
+  const groups = cfg.listGroups();
+  groups.forEach(g => {
+    g.items.forEach((it) => {
+      let band = '';
+      if(g.label === 'To Do'){
+        const idx = cfg.todoArray().findIndex(c => c.key === it.key);
+        const b = bandForIndex(idx);
+        band = b.key === 'none' ? '' : b.label;
+      }
+      rows.push([
+        it.type || '', it.key, it.summary, it.reporter || '', it.priority || '',
+        it.status || '', band, it.resolution || '', it.created || '',
+        (it.components || []).join(', '), (it.fixVersions || []).join(', '),
+        (it[cfg.linkedField] || []).join(', '), it.assignee || ''
+      ]);
+    });
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = cfg.exportCols;
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, cfg.exportFileName.slice(0,28));
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  downloadBlob(new Blob([wbout], { type: 'application/octet-stream' }), `${cfg.exportFileName}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  showToast('Excel exported', 'The file was downloaded with the current list.');
+});
+
+document.getElementById('btnExportPdf').addEventListener('click', () => {
+  const cfg = proj();
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+
+  const FILL_BY_STATUS_CLASS = {
+    'st-green': [228, 247, 238],
+    'st-orange': [253, 240, 227],
+    'st-purple': [241, 234, 251],
+    'st-plain': [243, 242, 241],
+  };
+
+  doc.setFontSize(14);
+  doc.text(cfg.title, 30, 30);
+  doc.setFontSize(9);
+  doc.setTextColor(120, 120, 120);
+  doc.text(`${cfg.sub} · ${SNAPSHOT_LABEL}`, 30, 44);
+
+  const head = [['Type', 'Key', 'Summary', 'Reporter', 'Priority', 'Status', 'Resolution', 'Created at', 'Components', 'Fix Version', cfg.linkedLabel]];
+  const body = [];
+  cfg.listGroups().forEach(g => {
+    g.items.forEach(it => {
+      body.push([
+        it.type || '', it.key, it.summary, it.reporter || '', it.priority || '',
+        it.status || '', it.resolution || '', it.created || '',
+        (it.components || []).join(', '), (it.fixVersions || []).join(', '),
+        (it[cfg.linkedField] || []).join(', ')
+      ]);
+    });
+  });
+
+  doc.autoTable({
+    head, body, startY: 56, theme: 'grid',
+    styles: { fontSize: 7.5, cellPadding: 4 },
+    headStyles: { fillColor: [0, 69, 98], textColor: 255, fontSize: 7.5 },
+    columnStyles: { 2: { cellWidth: 170 } },
+    didParseCell: (data) => {
+      if (data.section === 'body') {
+        const status = data.row.raw[5];
+        const cls = cfg.statusPillClass(status);
+        const fill = FILL_BY_STATUS_CLASS[cls];
+        if (fill) data.cell.styles.fillColor = fill;
+      }
+    },
+  });
+
+  const pdfBlob = doc.output('blob');
+  downloadBlob(pdfBlob, `${cfg.exportFileName}_${new Date().toISOString().slice(0,10)}.pdf`);
+  showToast('PDF exported', 'The file was downloaded with the current list, color-coded by status.');
+});
+
+document.getElementById('btnProjectTdp').classList.remove('active');
+document.getElementById('btnProjectMas').classList.add('active');
+
+async function initDashboard(){
+  await loadLiveData();
+  updateHeader();
+  await restoreTodoOrder();
+  renderLista();
+  renderKanban();
+}
+
+document.getElementById('btnRefresh').addEventListener('click', async () => {
+  document.getElementById('btnRefresh').disabled = true;
+  await loadLiveData();
+  updateHeader();
+  await restoreTodoOrder();
+  renderLista();
+  renderKanban();
+  if(document.getElementById('panelRelease').style.display !== 'none') renderRelease();
+  document.getElementById('btnRefresh').disabled = false;
+  showToast('Refreshed', 'Data reloaded from Jira just now.');
+});
+
+initDashboard();
+</script>
+
+</body>
+</html>

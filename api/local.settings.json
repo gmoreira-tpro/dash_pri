@@ -1,0 +1,10 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "JIRA_BASE_URL": "https://tprodublin.atlassian.net",
+    "JIRA_EMAIL": "your-email@tpro.io",
+    "JIRA_API_TOKEN": "paste-your-local-test-token-here-never-commit"
+  }
+}
