@@ -478,10 +478,11 @@ async function fetchNextRelease() {
 // the active sprint, the TDP tickets linked to them, and TDP tickets in
 // their own active sprint even when not linked to any MAS ticket.
 const MAS_SPRINT_JQL = 'project = MAS AND Team = "Hoffweb Workflow" AND sprint in openSprints()';
-// Scoped to the same TDP_KEYS list used everywhere else in this dashboard —
-// "sprint in openSprints()" alone would return the whole TDP team's sprint,
-// not just Hoffweb work (TDP has no reliable field to filter Hoffweb by).
-const TDP_SPRINT_JQL = `key in (${TDP_KEYS.join(',')}) AND sprint in openSprints()`;
+// Team = "Hoffweb Workflow" was unreliable for the full TDP backlog (it
+// pulled in 100+ unrelated tickets, mostly stray Backlog items with no
+// sprint). Scoped down to an open sprint, that noise shouldn't be present,
+// so Team is used directly here instead of TDP_KEYS.
+const TDP_SPRINT_JQL = 'project = TDP AND Team = "Hoffweb Workflow" AND sprint in openSprints()';
 
 let SPRINT_TDP = [];
 let SPRINT_MAS = [];
