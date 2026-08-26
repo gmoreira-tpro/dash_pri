@@ -251,6 +251,7 @@
     <button class="tab-btn active" id="tabListaBtn">List</button>
     <button class="tab-btn" id="tabKanbanBtn">Kanban</button>
     <button class="tab-btn" id="tabReleaseBtn">Next Release</button>
+    <button class="tab-btn" id="tabSprintBtn">Current Sprint</button>
   </div>
   <div class="search-wrap">
     <span class="search-icon">🔍</span>
@@ -268,6 +269,7 @@
   <div class="panel" id="panelLista"></div>
   <div class="panel" id="panelKanban" style="display:none;"></div>
   <div class="panel" id="panelRelease" style="display:none;"></div>
+  <div class="panel" id="panelSprint" style="display:none;"></div>
 </main>
 
 <div class="confirm-bar" id="confirmBar">
@@ -323,11 +325,12 @@ let MAS_TODO = [];
 let TDP_ORIGINAL_ORDER = [];
 let MAS_ORIGINAL_ORDER = [];
 
-const NEXT_RELEASE = null;
-const NEXT_RELEASE_TDP = [];
-// The "Next Release" tab still isn't wired to live data — it needs a
-// separate call to find the next unreleased "HoffWeb x.x.x" version and
-// pull tickets tagged to it. Left as a placeholder for now.
+let NEXT_RELEASE = null;
+let NEXT_RELEASE_TDP = [];
+// Automatically resolved on each load: the lowest-numbered unreleased
+// "HoffWeb x.x.x" version in TDP, and the TDP tickets tagged to it
+// (full project scope, not limited to TDP_KEYS — a release can include
+// tickets outside the manually tracked list).
 
 function formatJiraDate(iso) {
   if (!iso) return null;
@@ -421,6 +424,91 @@ function setLiveBadge(state, text) {
   if (text) label.textContent = text;
 }
 
+// ===================== Next Release =====================
+// "Next" = the unreleased "HoffWeb x.x.x" version with the lowest
+// version number (not the nearest release date — Jira doesn't always
+// have dates set, and version number is the more reliable ordering).
+function parseHoffwebVersion(name) {
+  const m = /^HoffWeb\s+(\d+)\.(\d+)\.(\d+)$/.exec((name || '').trim());
+  if (!m) return null;
+  return [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)];
+}
+
+function compareVersions(a, b) {
+  for (let i = 0; i < 3; i++) {
+    if (a[i] !== b[i]) return a[i] - b[i];
+  }
+  return 0;
+}
+
+async function findNextTdpVersion() {
+  const res = await fetch('/api/jira/rest/api/3/project/TDP/versions');
+  if (!res.ok) throw new Error(`Failed to fetch TDP versions (${res.status})`);
+  const versions = await res.json();
+
+  const candidates = versions
+    .filter(v => !v.released && !v.archived)
+    .map(v => ({ ...v, parsed: parseHoffwebVersion(v.name) }))
+    .filter(v => v.parsed);
+
+  if (!candidates.length) return null;
+
+  candidates.sort((a, b) => compareVersions(a.parsed, b.parsed));
+  return candidates[0];
+}
+
+async function fetchNextRelease() {
+  const version = await findNextTdpVersion();
+  if (!version) {
+    NEXT_RELEASE = null;
+    NEXT_RELEASE_TDP = [];
+    return;
+  }
+
+  const jql = `project = TDP AND fixVersion = "${version.name}"`;
+  const issues = await fetchAllIssues(jql);
+
+  NEXT_RELEASE = { version: version.name, releaseDate: version.releaseDate || null };
+  NEXT_RELEASE_TDP = issues.map(it => mapIssue(it, 'MAS', 'linkedMas'));
+}
+
+// ===================== Current Sprint =====================
+// "Current sprint" = Jira's own openSprints() filter (the active sprint on
+// each board), not just "has ever had a sprint set". Shows: MAS tickets in
+// the active sprint, the TDP tickets linked to them, and TDP tickets in
+// their own active sprint even when not linked to any MAS ticket.
+const MAS_SPRINT_JQL = 'project = MAS AND Team = "Hoffweb Workflow" AND sprint in openSprints()';
+const TDP_SPRINT_JQL = 'project = TDP AND sprint in openSprints()';
+
+let SPRINT_TDP = [];
+let SPRINT_MAS = [];
+
+async function fetchCurrentSprint() {
+  const [tdpIssues, masIssues] = await Promise.all([
+    fetchAllIssues(TDP_SPRINT_JQL),
+    fetchAllIssues(MAS_SPRINT_JQL),
+  ]);
+
+  const tdpMapped = tdpIssues.map(it => mapIssue(it, 'MAS', 'linkedMas'));
+  const masMapped = masIssues.map(it => mapIssue(it, 'TDP', 'linkedTdp'));
+
+  // Pull in TDP tickets linked from a MAS-in-sprint ticket, even if that
+  // TDP ticket isn't itself in an open sprint.
+  const knownTdpKeys = new Set(tdpMapped.map(it => it.key));
+  const missingTdpKeys = [...new Set(masMapped.flatMap(it => it.linkedTdp || []))]
+    .filter(k => !knownTdpKeys.has(k));
+
+  let extraTdp = [];
+  if (missingTdpKeys.length) {
+    const extraIssues = await fetchAllIssues(`key in (${missingTdpKeys.join(',')})`);
+    extraTdp = extraIssues.map(it => mapIssue(it, 'MAS', 'linkedMas'));
+  }
+
+  SPRINT_TDP = [...tdpMapped, ...extraTdp];
+  SPRINT_MAS = masMapped;
+}
+
+
 async function loadLiveData() {
   setLiveBadge('loading', 'Loading from Jira…');
   try {
@@ -432,6 +520,23 @@ async function loadLiveData() {
 
     bucketTdp(tdpIssues);
     bucketMas(masIssues);
+
+    try {
+      await fetchNextRelease();
+    } catch (releaseErr) {
+      // Don't fail the whole load over the Release tab — log and leave it empty.
+      console.error('Failed to load Next Release data', releaseErr);
+      NEXT_RELEASE = null;
+      NEXT_RELEASE_TDP = [];
+    }
+
+    try {
+      await fetchCurrentSprint();
+    } catch (sprintErr) {
+      console.error('Failed to load Current Sprint data', sprintErr);
+      SPRINT_TDP = [];
+      SPRINT_MAS = [];
+    }
 
     TDP_ORIGINAL_ORDER = TDP_TODO.map(c => c.key);
     MAS_ORIGINAL_ORDER = MAS_TODO.map(c => c.key);
@@ -1097,12 +1202,14 @@ function renderRelease(){
   const total = NEXT_RELEASE_TDP.length;
   const pct = Math.round((done.length / total) * 100);
 
-  const release = new Date(NEXT_RELEASE.releaseDate + 'T00:00:00');
+  const hasDate = !!NEXT_RELEASE.releaseDate;
+  const release = hasDate ? new Date(NEXT_RELEASE.releaseDate + 'T00:00:00') : null;
   const today = new Date();
   today.setHours(0,0,0,0);
   const msPerDay = 24*60*60*1000;
-  const daysLeft = Math.round((release - today) / msPerDay);
-  const daysLabel = daysLeft > 0 ? `${daysLeft} day${daysLeft === 1 ? '' : 's'} to go`
+  const daysLeft = hasDate ? Math.round((release - today) / msPerDay) : null;
+  const daysLabel = !hasDate ? 'No target date set'
+    : daysLeft > 0 ? `${daysLeft} day${daysLeft === 1 ? '' : 's'} to go`
     : daysLeft === 0 ? 'Releasing today' : `${Math.abs(daysLeft)} day${Math.abs(daysLeft) === 1 ? '' : 's'} overdue`;
 
   const header = document.createElement('div');
@@ -1112,7 +1219,7 @@ function renderRelease(){
       <h2>${NEXT_RELEASE.version}</h2>
       <span class="release-days">${daysLabel}</span>
     </div>
-    <div class="release-meta">Target date: ${release.toLocaleDateString('en-GB', {day:'numeric', month:'long', year:'numeric'})} · Hoffweb · confirmed unreleased in Jira at time of last refresh</div>
+    <div class="release-meta">Target date: ${hasDate ? release.toLocaleDateString('en-GB', {day:'numeric', month:'long', year:'numeric'}) : 'not set in Jira'} · Hoffweb · confirmed unreleased in Jira at time of last refresh</div>
     <div class="release-progress-track"><div class="release-progress-fill" style="width:${pct}%"></div></div>
     <div class="release-progress-label">${done.length} of ${total} TDP tickets done (${pct}%) — ${notDone.length} still in progress</div>
   `;
@@ -1161,23 +1268,89 @@ function renderRelease(){
   });
 }
 
+// ---- Current Sprint tab ----
+function renderSprint(){
+  const panel = document.getElementById('panelSprint');
+  panel.innerHTML = '';
+
+  if(SPRINT_TDP.length === 0 && SPRINT_MAS.length === 0){
+    panel.innerHTML = `
+      <div class="release-header">
+        <div class="release-title-row"><h2>Nothing in an open sprint right now</h2></div>
+        <div class="release-meta">At the time of the last refresh, no TDP or MAS ticket had an active (open) sprint assigned in Jira.</div>
+      </div>`;
+    return;
+  }
+
+  const header = document.createElement('div');
+  header.className = 'release-header';
+  header.innerHTML = `
+    <div class="release-title-row"><h2>Current Sprint</h2></div>
+    <div class="release-meta">${SPRINT_TDP.length} TDP ticket${SPRINT_TDP.length === 1 ? '' : 's'} · ${SPRINT_MAS.length} MAS ticket${SPRINT_MAS.length === 1 ? '' : 's'} in an open sprint at time of last refresh</div>
+  `;
+  panel.appendChild(header);
+
+  const tdpSection = document.createElement('div');
+  tdpSection.className = 'status-group';
+  tdpSection.innerHTML = `<div class="status-head" style="cursor:default;"><h3>TDP tickets in the current sprint</h3><span class="status-count">${SPRINT_TDP.length}</span></div>`;
+  const tdpTableWrap = document.createElement('div');
+  tdpTableWrap.className = 'table-scroll';
+  tdpTableWrap.innerHTML = SPRINT_TDP.length ? `
+    <table class="data-table" style="min-width:820px;">
+      <thead><tr><th>Key</th><th>Summary</th><th>Assignee</th><th>Status</th><th>Components</th></tr></thead>
+      <tbody>
+        ${SPRINT_TDP.map(it => releaseRowHtml(it)).join('')}
+      </tbody>
+    </table>` : `<div class="empty-note">No TDP tickets in an open sprint.</div>`;
+  tdpSection.appendChild(tdpTableWrap);
+  panel.appendChild(tdpSection);
+
+  const masSection = document.createElement('div');
+  masSection.className = 'status-group';
+  masSection.innerHTML = `<div class="status-head" style="cursor:default;"><h3>MAS tickets in the current sprint</h3><span class="status-count">${SPRINT_MAS.length}</span></div>`;
+  const masTableWrap = document.createElement('div');
+  masTableWrap.className = 'table-scroll';
+  masTableWrap.innerHTML = SPRINT_MAS.length ? `
+    <table class="data-table" style="min-width:900px;">
+      <thead><tr><th>Key</th><th>Summary</th><th>Assignee</th><th>MAS Status</th><th>Linked TDP</th></tr></thead>
+      <tbody>
+        ${SPRINT_MAS.map(it => `
+          <tr class="clickable-row" data-key="${it.key}" title="Open ${it.key} in Jira">
+            <td class="col-key cell-key" style="width:82px;">${it.key}</td>
+            <td>${it.summary}</td>
+            <td class="cell-muted" style="width:130px;">${it.assignee || '—'}</td>
+            <td style="width:170px;"><span class="status-pill ${statusPillClassForAny(it.status)}">${it.status}</span></td>
+            <td style="width:150px;">${(it.linkedTdp||[]).map(k => `<span class="comp-chip link-chip">${k}</span>`).join('')}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>` : `<div class="empty-note">No MAS tickets in an open sprint.</div>`;
+  masSection.appendChild(masTableWrap);
+  panel.appendChild(masSection);
+
+  panel.querySelectorAll('.clickable-row').forEach(row => {
+    row.addEventListener('click', () => window.open(JIRA_BASE + row.dataset.key, '_blank'));
+  });
+}
+
 // ---- Tabs ----
 document.getElementById('panelLista').addEventListener('click', (e) => {
   const row = e.target.closest('.clickable-row');
   if(row) window.open(JIRA_BASE + row.dataset.key, '_blank');
 });
 
-const TABS = ['Lista', 'Kanban', 'Release'];
+const TABS = ['Lista', 'Kanban', 'Release', 'Sprint'];
 function showTab(name){
   TABS.forEach(t => {
     document.getElementById(`tab${t}Btn`).classList.toggle('active', t === name);
     document.getElementById(`panel${t}`).style.display = t === name ? '' : 'none';
   });
   if(name === 'Release') renderRelease();
+  if(name === 'Sprint') renderSprint();
 }
 document.getElementById('tabListaBtn').addEventListener('click', () => showTab('Lista'));
 document.getElementById('tabKanbanBtn').addEventListener('click', () => showTab('Kanban'));
 document.getElementById('tabReleaseBtn').addEventListener('click', () => showTab('Release'));
+document.getElementById('tabSprintBtn').addEventListener('click', () => showTab('Sprint'));
 
 // ---- Export ----
 function downloadBlob(blob, filename){
@@ -1291,6 +1464,7 @@ document.getElementById('btnRefresh').addEventListener('click', async () => {
   renderLista();
   renderKanban();
   if(document.getElementById('panelRelease').style.display !== 'none') renderRelease();
+  if(document.getElementById('panelSprint').style.display !== 'none') renderSprint();
   document.getElementById('btnRefresh').disabled = false;
   showToast('Refreshed', 'Data reloaded from Jira just now.');
 });
