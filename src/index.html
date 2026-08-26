@@ -478,7 +478,10 @@ async function fetchNextRelease() {
 // the active sprint, the TDP tickets linked to them, and TDP tickets in
 // their own active sprint even when not linked to any MAS ticket.
 const MAS_SPRINT_JQL = 'project = MAS AND Team = "Hoffweb Workflow" AND sprint in openSprints()';
-const TDP_SPRINT_JQL = 'project = TDP AND sprint in openSprints()';
+// Scoped to the same TDP_KEYS list used everywhere else in this dashboard —
+// "sprint in openSprints()" alone would return the whole TDP team's sprint,
+// not just Hoffweb work (TDP has no reliable field to filter Hoffweb by).
+const TDP_SPRINT_JQL = `key in (${TDP_KEYS.join(',')}) AND sprint in openSprints()`;
 
 let SPRINT_TDP = [];
 let SPRINT_MAS = [];
@@ -1268,6 +1271,24 @@ function renderRelease(){
   });
 }
 
+function sprintTdpRowHtml(it){
+  const comps = (it.components && it.components.length)
+    ? it.components.map(c => `<span class="comp-chip">${c}</span>`).join('')
+    : '<span class="cell-muted">—</span>';
+  const masChips = (it.linkedMas && it.linkedMas.length)
+    ? it.linkedMas.map(k => `<span class="comp-chip link-chip">${k}</span>`).join('')
+    : '<span class="cell-muted">—</span>';
+  return `
+    <tr class="clickable-row" data-key="${it.key}" title="Open ${it.key} in Jira">
+      <td class="col-key cell-key" style="width:82px;">${it.key}</td>
+      <td>${it.summary}</td>
+      <td class="cell-muted" style="width:130px;">${it.assignee || '—'}</td>
+      <td style="width:150px;"><span class="status-pill ${statusPillClassForAny(it.status)}">${it.status}</span></td>
+      <td style="width:190px;">${comps}</td>
+      <td style="width:150px;">${masChips}</td>
+    </tr>`;
+}
+
 // ---- Current Sprint tab ----
 function renderSprint(){
   const panel = document.getElementById('panelSprint');
@@ -1296,10 +1317,10 @@ function renderSprint(){
   const tdpTableWrap = document.createElement('div');
   tdpTableWrap.className = 'table-scroll';
   tdpTableWrap.innerHTML = SPRINT_TDP.length ? `
-    <table class="data-table" style="min-width:820px;">
-      <thead><tr><th>Key</th><th>Summary</th><th>Assignee</th><th>Status</th><th>Components</th></tr></thead>
+    <table class="data-table" style="min-width:960px;">
+      <thead><tr><th>Key</th><th>Summary</th><th>Assignee</th><th>Status</th><th>Components</th><th>Linked MAS</th></tr></thead>
       <tbody>
-        ${SPRINT_TDP.map(it => releaseRowHtml(it)).join('')}
+        ${SPRINT_TDP.map(it => sprintTdpRowHtml(it)).join('')}
       </tbody>
     </table>` : `<div class="empty-note">No TDP tickets in an open sprint.</div>`;
   tdpSection.appendChild(tdpTableWrap);
